@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "Score": {
+      "title": "Player Score",
+      "description": "Represents a high score entry in the global leaderboard.",
+      "type": "object",
+      "properties": {
+        "playerName": {
+          "type": "string",
+          "description": "The pilot name of the player."
+        },
+        "score": {
+          "type": "integer",
+          "description": "The high score achieved."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The Firebase Auth UID of the player."
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "The profile picture URL of the player."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the score was recorded."
+        }
+      },
+      "required": ["playerName", "score", "userId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/leaderboard/{scoreId}": {
+      "schema": "Score",
+      "description": "Global leaderboard collection where each document represents a high score."
+    }
+  }
+}

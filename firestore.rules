@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidScore(data) {
+      return data.keys().hasAll(['playerName', 'score', 'userId', 'createdAt']) &&
+             data.keys().size() <= 5 && // Including optional photoURL
+             data.playerName is string && data.playerName.size() <= 20 &&
+             data.score is int && data.score >= 0 &&
+             data.userId == request.auth.uid &&
+             data.createdAt == request.time &&
+             (data.get('photoURL', '') == '' || (data.photoURL is string && data.photoURL.size() <= 1000));
+    }
+
+    match /leaderboard/{userId} {
+      // Identity Protection: Document ID must match user's UID
+      allow get: if true;
+      allow list: if true; // Publicly viewable leaderboard
+      
+      allow create: if isSignedIn() && 
+                      userId == request.auth.uid && 
+                      isValidScore(incoming());
+      
+      allow update: if isSignedIn() && 
+                      userId == request.auth.uid && 
+                      isValidScore(incoming()) &&
+                      // Anti-tamper: Cannot lower your own score
+                      incoming().score > existing().score &&
+                      // Immutability: userId cannot change
+                      incoming().userId == existing().userId;
+      
+      allow delete: if isSignedIn() && userId == request.auth.uid;
+    }
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "name": "Void Dodger",
+  "description": "A fast-paced dodging game where you must survive waves of incoming projectiles.",
+  "requestFramePermissions": []
+}
