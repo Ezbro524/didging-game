@@ -57,11 +57,11 @@ const SKINS = [
 ];
 
 const THEMES = [
-  { id: 'space', name: 'Deep Space', bg: '#020617', accent: '#6366f1', description: 'Classic cosmic dodging' },
-  { id: 'sea', name: 'Abyssal Sea', bg: '#082f49', accent: '#0ea5e9', description: 'Deep water pressure' },
-  { id: 'forest', name: 'Mystic Forest', bg: '#052e16', accent: '#4ade80', description: 'Entangled nature' },
-  { id: 'lava', name: 'Inferno Lava', bg: '#450a0a', accent: '#ef4444', description: 'Extreme heat warning' },
-  { id: 'cyber', name: 'Cyber City', bg: '#0f0720', accent: '#d946ef', description: 'Neon-infused grid' },
+  { id: 'space', name: 'Deep Space', bg: '#020617', accent: '#6366f1', description: 'Classic cosmic dodging', skinId: 'default' },
+  { id: 'sea', name: 'Abyssal Sea', bg: '#082f49', accent: '#0ea5e9', description: 'Deep water pressure', skinId: 'cyan' },
+  { id: 'forest', name: 'Mystic Forest', bg: '#052e16', accent: '#4ade80', description: 'Entangled nature', skinId: 'green' },
+  { id: 'lava', name: 'Inferno Lava', bg: '#450a0a', accent: '#ef4444', description: 'Extreme heat warning', skinId: 'gold' },
+  { id: 'cyber', name: 'Cyber City', bg: '#0f0720', accent: '#d946ef', description: 'Neon-infused grid', skinId: 'pink' },
 ];
 
 type Projectile = {
@@ -107,6 +107,125 @@ type Particle = {
   color: string;
 };
 
+// --- Components ---
+
+const JoystickControl = ({ onUpdate, isPortrait }: { onUpdate: (vector: { x: number, y: number }) => void, isPortrait?: boolean }) => {
+  const [isActive, setIsActive] = useState(false);
+  const [basePos, setBasePos] = useState({ x: 0, y: 0, relX: 0, relY: 0 });
+  const [stickPos, setStickPos] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const onStart = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    
+    // Store both viewport-relative (for stable dx/dy) and container-relative (for rendering)
+    setBasePos({ 
+      x: clientX, 
+      y: clientY,
+      relX: clientX - rect.left,
+      relY: clientY - rect.top
+    });
+    setIsActive(true);
+    setStickPos({ x: 0, y: 0 });
+  };
+
+  const onMove = useCallback((e: MouseEvent | TouchEvent) => {
+    if (!isActive) return;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+    const dx = clientX - basePos.x;
+    const dy = clientY - basePos.y;
+    const radius = isPortrait ? 40 : 60; // Smaller radius for smaller joystick
+    const distance = Math.hypot(dx, dy);
+
+    let finalDx = dx;
+    let finalDy = dy;
+
+    if (distance > radius) {
+      finalDx = (dx / distance) * radius;
+      finalDy = (dy / distance) * radius;
+    }
+
+    setStickPos({ x: finalDx, y: finalDy });
+    onUpdate({ x: finalDx / radius, y: finalDy / radius });
+  }, [isActive, basePos, onUpdate, isPortrait]);
+
+  const onEnd = useCallback(() => {
+    setIsActive(false);
+    setStickPos({ x: 0, y: 0 });
+    onUpdate({ x: 0, y: 0 });
+  }, [onUpdate]);
+
+  useEffect(() => {
+    if (isActive) {
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onEnd);
+      window.addEventListener('touchmove', onMove, { passive: false });
+      window.addEventListener('touchend', onEnd);
+    }
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onEnd);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+    };
+  }, [isActive, onMove, onEnd]);
+
+  return (
+    <div 
+      ref={containerRef}
+      onMouseDown={onStart}
+      onTouchStart={onStart}
+      className="absolute inset-0 w-full h-full touch-none z-10 overflow-hidden"
+    >
+      {isActive && (
+        <div 
+          className="absolute z-20 pointer-events-none"
+          style={{ 
+            left: basePos.relX, 
+            top: basePos.relY, 
+            transform: 'translate(-50%, -50%)' 
+          }}
+        >
+          {/* Visual Shell */}
+          <div className={`rounded-full bg-slate-900/60 border-2 border-indigo-500 bg-indigo-950/20 flex items-center justify-center relative shadow-2xl scale-105 ${isPortrait ? 'w-32 h-32' : 'w-44 h-44'}`}>
+            {/* Background patterns */}
+            <div className="absolute inset-0 rounded-full border border-white/5 m-3" />
+            <div className="absolute inset-0 rounded-full border border-white/5 m-10" />
+            
+            {/* Directional indicators */}
+            <div className={`absolute top-3 left-1/2 -translate-x-1/2 w-1 h-2 rounded-full transition-colors ${stickPos.y < -20 ? 'bg-indigo-400' : 'bg-white/10'}`} />
+            <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 w-1 h-2 rounded-full transition-colors ${stickPos.y > 20 ? 'bg-indigo-400' : 'bg-white/10'}`} />
+            <div className={`absolute left-3 top-1/2 -translate-y-1/2 h-1 w-2 rounded-full transition-colors ${stickPos.x < -20 ? 'bg-indigo-400' : 'bg-white/10'}`} />
+            <div className={`absolute right-3 top-1/2 -translate-y-1/2 h-1 w-2 rounded-full transition-colors ${stickPos.x > 20 ? 'bg-indigo-400' : 'bg-white/10'}`} />
+
+            <div className="absolute inset-0 rounded-full bg-indigo-500/5 blur-2xl" />
+            
+            <motion.div 
+              animate={{ x: stickPos.x, y: stickPos.y }}
+              transition={{ type: 'spring', damping: 25, stiffness: 400, mass: 0.5 }}
+              className={`${isPortrait ? 'w-14 h-14' : 'w-20 h-20'} rounded-full flex items-center justify-center z-10 relative`}
+            >
+              {/* Glow effect */}
+              <div className="absolute inset-0 rounded-full bg-indigo-500/30 scale-125 blur-md" />
+              
+              {/* The stick itself */}
+              <div className={`${isPortrait ? 'w-12 h-12' : 'w-16 h-16'} rounded-full border-2 border-indigo-300 bg-white shadow-[0_0_20px_rgba(129,140,248,0.8)] scale-90 flex items-center justify-center`}>
+                 <div className={`${isPortrait ? 'w-6 h-6' : 'w-8 h-8'} rounded-full border-2 border-indigo-100 bg-indigo-50`} />
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -125,6 +244,9 @@ export default function App() {
   const [sensitivity, setSensitivity] = useState(0.15);
   const [playerName, setPlayerName] = useState("");
   const [isTouchDevice, setIsTouchDevice] = useState(false);
+  const [useJoystick, setUseJoystick] = useState(false);
+  const [joystickVector, setJoystickVector] = useState({ x: 0, y: 0 });
+  const [isPortrait, setIsPortrait] = useState(window.innerWidth < window.innerHeight);
   
   // Game state refs (to avoid re-renders in the loop)
   const playerPos = useRef({ x: 0, y: 0 });
@@ -155,6 +277,8 @@ export default function App() {
   const bonusScoreRef = useRef(0);
   const scoreRef = useRef(0);
   const sensitivityRef = useRef(0.15);
+  const useJoystickRef = useRef(false);
+  const joystickVectorRef = useRef({ x: 0, y: 0 });
   const skinColorRef = useRef(SKINS[0].color);
   const pauseStartTime = useRef<number | null>(null);
   const frameId = useRef<number>(0);
@@ -164,6 +288,14 @@ export default function App() {
   useEffect(() => {
     sensitivityRef.current = sensitivity;
   }, [sensitivity]);
+
+  useEffect(() => {
+    useJoystickRef.current = useJoystick;
+  }, [useJoystick]);
+
+  useEffect(() => {
+    joystickVectorRef.current = joystickVector;
+  }, [joystickVector]);
 
   useEffect(() => {
     skinColorRef.current = selectedSkin.color;
@@ -185,6 +317,12 @@ export default function App() {
 
     // Check for touch device
     setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
+    const handleResize = () => {
+      setIsPortrait(window.innerWidth < window.innerHeight);
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
 
     // Auth listener
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
@@ -231,6 +369,7 @@ export default function App() {
     return () => {
       unsubscribeAuth();
       unsubscribeLB();
+      window.removeEventListener('resize', handleResize);
     };
   }, []);
 
@@ -395,7 +534,8 @@ export default function App() {
     const spread = (Math.random() - 0.5) * 0.4;
     const finalAngle = angle + spread;
     
-    const speed = projectileSpeed.current * (0.8 + Math.random() * 0.4);
+    const difficultyMultiplier = (isPortrait && isTouchDevice) ? 0.75 : 1.0;
+    const speed = projectileSpeed.current * (0.8 + Math.random() * 0.4) * difficultyMultiplier;
     
     let type: Projectile['type'] = 'arrow';
     let color = '#f59e0b';
@@ -611,14 +751,23 @@ export default function App() {
       moveX /= length;
       moveY /= length;
       
-      targetPos.current.x = Math.max(0, Math.min(width, playerPos.current.x + moveX * KEYBOARD_SPEED));
-      targetPos.current.y = Math.max(0, Math.min(height, playerPos.current.y + moveY * KEYBOARD_SPEED));
+      const speed = KEYBOARD_SPEED;
+      playerPos.current.x = Math.max(0, Math.min(width, playerPos.current.x + moveX * speed));
+      playerPos.current.y = Math.max(0, Math.min(height, playerPos.current.y + moveY * speed));
+      targetPos.current.x = playerPos.current.x;
+      targetPos.current.y = playerPos.current.y;
+    } else if (useJoystickRef.current && (joystickVectorRef.current.x !== 0 || joystickVectorRef.current.y !== 0)) {
+      const speed = KEYBOARD_SPEED * 0.3; // Slightly slower as requested
+      playerPos.current.x = Math.max(0, Math.min(width, playerPos.current.x + joystickVectorRef.current.x * speed));
+      playerPos.current.y = Math.max(0, Math.min(height, playerPos.current.y + joystickVectorRef.current.y * speed));
+      targetPos.current.x = playerPos.current.x;
+      targetPos.current.y = playerPos.current.y;
+    } else {
+      const dx = targetPos.current.x - playerPos.current.x;
+      const dy = targetPos.current.y - playerPos.current.y;
+      playerPos.current.x += dx * sensitivityRef.current;
+      playerPos.current.y += dy * sensitivityRef.current;
     }
-
-    const dx = targetPos.current.x - playerPos.current.x;
-    const dy = targetPos.current.y - playerPos.current.y;
-    playerPos.current.x += dx * sensitivityRef.current;
-    playerPos.current.y += dy * sensitivityRef.current;
 
     // Update Player Trail
     playerTrail.current.unshift({ x: playerPos.current.x, y: playerPos.current.y });
@@ -1384,7 +1533,7 @@ export default function App() {
   }, [gameState, score, highScore]);
 
   const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (gameState !== 'playing' || isKeyboardMoving.current) return;
+    if (gameState !== 'playing' || isPaused || isKeyboardMoving.current || useJoystickRef.current) return;
     
     // Prevent default scrolling behavior ONLY when playing the game
     if (e.cancelable) {
@@ -1411,15 +1560,25 @@ export default function App() {
 
   return (
     <div 
-      id="game-container"
-      className={`relative w-full h-screen bg-[#020617] overflow-hidden font-sans text-white ${gameState === 'playing' ? 'select-none touch-none' : ''}`}
-      ref={containerRef}
+      id="game-root"
+      className={`relative w-full h-screen bg-slate-950 overflow-hidden font-sans text-white flex ${gameState === 'playing' ? 'select-none touch-none' : ''} ${
+        useJoystick && gameState === 'playing' && !isPortrait ? 'flex-row' : 'flex-col'
+      }`}
       onMouseMove={handleMouseMove}
       onTouchMove={gameState === 'playing' ? handleMouseMove : undefined}
       onTouchStart={gameState === 'playing' ? handleMouseMove : undefined}
     >
-      {/* HUD */}
-      <div className="absolute top-4 sm:top-8 left-4 sm:left-8 z-10 pointer-events-none">
+      {/* Game Area Wrapper - Full screen on portrait overlay, side-by-side on landscape */}
+      <div 
+        className={`relative transition-all duration-500 overflow-hidden ${
+          useJoystick && gameState === 'playing' ? (
+            isPortrait ? 'h-screen w-full' : 'h-full w-[75vw]'
+          ) : 'h-screen w-full'
+        }`}
+        ref={containerRef}
+      >
+        {/* HUD */}
+        <div className="absolute top-4 sm:top-8 left-4 sm:left-8 z-10 pointer-events-none">
         <div className="flex flex-col gap-0 sm:gap-1">
           <span className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-indigo-400 font-semibold">Score</span>
           <span className="text-2xl sm:text-4xl font-black tabular-nums text-white drop-shadow-[0_0_10px_rgba(99,102,241,0.5)]">{score}</span>
@@ -1436,11 +1595,40 @@ export default function App() {
         </div>
       </div>
 
-      {/* Canvas */}
-      <canvas 
-        ref={canvasRef}
-        className="w-full h-full cursor-none"
-      />
+        <canvas 
+          ref={canvasRef}
+          className={`w-full h-full ${useJoystick ? 'cursor-default' : 'cursor-none'}`}
+        />
+      </div>
+
+      {/* Joystick Section (Mobile Only Bottom Area) */}
+      {useJoystick && gameState === 'playing' && (
+        <div className={`relative overflow-hidden ${
+          isPortrait 
+            ? 'absolute bottom-0 h-[15vh] w-full bg-black/20 border-t border-white/5 backdrop-blur-[2px]' 
+            : 'h-full w-[25vw] border-l border-white/10 bg-black/40'
+        }`}>
+          {/* Background decoration */}
+          <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ 
+            backgroundImage: `radial-gradient(circle at center, ${selectedTheme.accent} 0%, transparent 70%)` 
+          }} />
+          <div className="absolute inset-0 opacity-5 pointer-events-none bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]" />
+          
+          {/* Tech Ornaments */}
+          <div className="absolute top-4 left-4 w-10 h-10 border-t border-l border-white/10 rounded-tl-lg pointer-events-none" />
+          <div className="absolute top-4 right-4 w-10 h-10 border-t border-r border-white/10 rounded-tr-lg pointer-events-none" />
+          <div className="absolute bottom-4 left-4 w-10 h-10 border-b border-l border-white/10 rounded-bl-lg pointer-events-none" />
+          <div className="absolute bottom-4 right-4 w-10 h-10 border-b border-r border-white/10 rounded-br-lg pointer-events-none" />
+          
+          <JoystickControl onUpdate={(v) => setJoystickVector(v)} isPortrait={isPortrait} />
+          
+          {!isPortrait && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-[0.5em] text-slate-600 font-bold pointer-events-none">
+              Tactical Controller Interface
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Overlays */}
       <AnimatePresence>
@@ -1681,55 +1869,50 @@ export default function App() {
               >
                 <h2 className="text-3xl font-black mb-8 text-center uppercase italic tracking-tight">Character Setup</h2>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-12">
-                  {/* Skin Selection */}
-                  <div>
-                    <label className="block text-xs uppercase tracking-widest text-slate-500 font-bold mb-4">Select Skin</label>
-                    <div className="grid grid-cols-5 gap-3">
-                      {SKINS.map((skin) => (
-                        <button
-                          key={skin.id}
-                          onClick={() => setSelectedSkin(skin)}
-                          className={`aspect-square rounded-xl transition-all flex items-center justify-center border-2 ${
-                            selectedSkin.id === skin.id ? 'border-white scale-110 shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'border-transparent hover:scale-105'
-                          }`}
-                          style={{ backgroundColor: skin.color }}
-                        >
-                          {selectedSkin.id === skin.id && <div className="w-2 h-2 bg-white rounded-full" />}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="mt-4 text-center text-sm font-medium" style={{ color: selectedSkin.color }}>{selectedSkin.name} Skin</p>
-                  </div>
-
-                  {/* Theme Selection */}
-                  <div className="col-span-1 md:col-span-2">
-                    <label className="block text-xs uppercase tracking-widest text-slate-500 font-bold mb-4">World Selection</label>
+                <div className="grid grid-cols-1 gap-12 mb-12">
+                  {/* Unified Theme & Skin Selection */}
+                  <div className="col-span-1">
+                    <label className="block text-xs uppercase tracking-widest text-slate-500 font-bold mb-4">Select Theme & Skin</label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                      {THEMES.map((theme) => (
-                        <button
-                          key={theme.id}
-                          onClick={() => setSelectedTheme(theme)}
-                          className={`group relative p-4 rounded-2xl transition-all border-2 text-left overflow-hidden ${
-                            selectedTheme.id === theme.id ? 'border-indigo-500 bg-indigo-500/10' : 'border-white/5 bg-white/5 hover:bg-white/10 hover:border-white/20'
-                          }`}
-                        >
-                          <div 
-                            className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity" 
-                            style={{ background: `radial-gradient(circle at center, ${theme.accent}, transparent)` }}
-                          />
-                          <h4 className={`font-black uppercase italic tracking-tight text-sm mb-1 ${selectedTheme.id === theme.id ? 'text-indigo-400' : 'text-white'}`}>
-                            {theme.name}
-                          </h4>
-                          <p className="text-[10px] text-slate-500 font-bold leading-tight uppercase tracking-widest">{theme.description}</p>
-                          {selectedTheme.id === theme.id && (
-                            <motion.div 
-                              layoutId="activeTheme"
-                              className="absolute top-2 right-2 w-1.5 h-1.5 bg-indigo-500 rounded-full"
+                      {THEMES.map((theme) => {
+                        const associatedSkin = SKINS.find(s => s.id === theme.skinId) || SKINS[0];
+                        return (
+                          <button
+                            key={theme.id}
+                            onClick={() => {
+                              setSelectedTheme(theme);
+                              setSelectedSkin(associatedSkin);
+                            }}
+                            className={`group relative p-4 rounded-2xl transition-all border-2 text-left overflow-hidden ${
+                              selectedTheme.id === theme.id ? 'border-indigo-500 bg-indigo-500/10' : 'border-white/5 bg-white/5 hover:bg-white/10 hover:border-white/20'
+                            }`}
+                          >
+                            <div 
+                              className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity" 
+                              style={{ background: `radial-gradient(circle at center, ${theme.accent}, transparent)` }}
                             />
-                          )}
-                        </button>
-                      ))}
+                            
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className={`font-black uppercase italic tracking-tight text-sm ${selectedTheme.id === theme.id ? 'text-indigo-400' : 'text-white'}`}>
+                                {theme.name}
+                              </h4>
+                              <div 
+                                className="w-4 h-4 rounded-full border border-white/20 shadow-sm" 
+                                style={{ backgroundColor: associatedSkin.color }}
+                              />
+                            </div>
+                            
+                            <p className="text-[10px] text-slate-500 font-bold leading-tight uppercase tracking-widest">{theme.description}</p>
+                            
+                            {selectedTheme.id === theme.id && (
+                              <motion.div 
+                                layoutId="activeTheme"
+                                className="absolute top-2 right-2 w-1.5 h-1.5 bg-indigo-500 rounded-full"
+                              />
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -1737,7 +1920,7 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-12">
                   {/* Sensitivity Adjustment */}
                   <div>
-                    <label className="block text-xs uppercase tracking-widest text-slate-500 font-bold mb-4">Sensitivity</label>
+                    <label className="block text-xs uppercase tracking-widest text-slate-500 font-bold mb-4 italic">Controls</label>
                     <div className="flex items-center gap-4 bg-black/40 p-4 rounded-2xl border border-white/5">
                       <button 
                         onClick={() => setSensitivity(s => Math.max(0.05, s - 0.05))}
@@ -1747,6 +1930,7 @@ export default function App() {
                       </button>
                       <div className="flex-1 text-center">
                         <span className="text-2xl font-black tabular-nums">{(sensitivity * 100).toFixed(0)}%</span>
+                        <p className="text-[8px] uppercase tracking-widest text-slate-500 font-bold mt-1">Sensitivity</p>
                       </div>
                       <button 
                         onClick={() => setSensitivity(s => Math.min(0.5, s + 0.05))}
@@ -1755,8 +1939,38 @@ export default function App() {
                         +
                       </button>
                     </div>
-                    <p className="mt-4 text-slate-500 text-xs text-center">Higher sensitivity means faster response.</p>
                   </div>
+
+                  {/* Controller Mode Selection */}
+                  {isTouchDevice && (
+                    <div className="col-span-1 md:col-span-2">
+                       <label className="block text-xs uppercase tracking-widest text-slate-500 font-bold mb-4 italic">Interface Selection</label>
+                       <div className="grid grid-cols-2 gap-4">
+                         <button 
+                          onClick={() => setUseJoystick(false)}
+                          className={`p-5 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 relative overflow-hidden ${!useJoystick ? 'border-indigo-500 bg-indigo-500/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}
+                         >
+                           <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${!useJoystick ? 'bg-indigo-500' : 'bg-transparent'}`} />
+                           <Shield className="w-8 h-8 text-indigo-400" />
+                           <div className="text-center">
+                             <p className="text-sm font-black uppercase tracking-tight">Pointer</p>
+                             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Natural Drag</p>
+                           </div>
+                         </button>
+                         <button 
+                          onClick={() => setUseJoystick(true)}
+                          className={`p-5 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 relative overflow-hidden ${useJoystick ? 'border-indigo-500 bg-indigo-500/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}
+                         >
+                           <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${useJoystick ? 'bg-indigo-500' : 'bg-transparent'}`} />
+                           <Zap className="w-8 h-8 text-indigo-400" />
+                           <div className="text-center">
+                             <p className="text-sm font-black uppercase tracking-tight">Joystick</p>
+                             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Fixed Stick</p>
+                           </div>
+                         </button>
+                       </div>
+                    </div>
+                  )}
 
                   {/* Leaderboard Section */}
                   <div>
