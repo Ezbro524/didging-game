@@ -1,5 +1,8 @@
 {
-  "name": "Void Dodger",
-  "description": "A fast-paced dodging game where you must survive waves of incoming projectiles.",
-  "requestFramePermissions": []
+  "name": "피하기 게임 (Void Dodger)",
+  "description": "장애물을 피하고 코인을 모아 최고 기록을 경신하는 중독성 있는 무료 웹 미니게임입니다.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
