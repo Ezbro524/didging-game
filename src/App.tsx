@@ -208,7 +208,7 @@ const JoystickControl = ({ onUpdate, isPortrait }: { onUpdate: (vector: { x: num
             
             <motion.div 
               animate={{ x: stickPos.x, y: stickPos.y }}
-              transition={{ type: 'spring', damping: 25, stiffness: 400, mass: 0.5 }}
+              transition={{ type: 'spring', damping: 15, stiffness: 600, mass: 0.3 }}
               className={`${isPortrait ? 'w-14 h-14' : 'w-20 h-20'} rounded-full flex items-center justify-center z-10 relative`}
             >
               {/* Glow effect */}
@@ -290,6 +290,12 @@ export default function App() {
   }, [sensitivity]);
 
   useEffect(() => {
+    if (playerName && !user) {
+      localStorage.setItem('void-dodger-playername', playerName);
+    }
+  }, [playerName, user]);
+
+  useEffect(() => {
     useJoystickRef.current = useJoystick;
   }, [useJoystick]);
 
@@ -338,6 +344,8 @@ export default function App() {
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
             setHighScore(userDoc.data().score);
+            // If they have a saved name in Firestore, use it? 
+            // For now, let's stick to displayName or local storage as secondary
           }
         } catch (error) {
           console.error("Error fetching user high score:", error);
@@ -345,7 +353,13 @@ export default function App() {
       } else {
         const savedHL = localStorage.getItem('void-dodger-highscore');
         if (savedHL) setHighScore(parseInt(savedHL));
-        setPlayerName(generateRandomName());
+
+        const savedName = localStorage.getItem('void-dodger-playername');
+        if (savedName) {
+          setPlayerName(savedName);
+        } else {
+          setPlayerName(generateRandomName());
+        }
       }
     });
 
@@ -435,8 +449,9 @@ export default function App() {
     const angle = Math.atan2(warning.targetY - y, warning.targetX - x);
     const speed = projectileSpeed.current * (warning.isEarth ? 0.4 : 1.2); // Earth is slower but homing
     
-    const baseSize = warning.isEarth ? 70 : 180 + Math.random() * 100;
-    const finalSize = isTouchDevice ? baseSize * 0.7 : baseSize;
+    const obstacleScale = isTouchDevice ? 0.55 : 1;
+    const baseSize = warning.isEarth ? 60 : 150 + Math.random() * 80;
+    const finalSize = baseSize * obstacleScale;
 
     projectiles.current.push({
       id: Date.now() + Math.random(),
@@ -476,6 +491,7 @@ export default function App() {
     else { x = -150; y = Math.random() * height; }
 
     const rand = Math.random();
+    const obstacleScale = isTouchDevice ? 0.55 : 1;
     const currentScore = scoreRef.current;
     
     // Earth spawn logic at 7000+
@@ -502,7 +518,7 @@ export default function App() {
         x, y,
         vx: (Math.random() - 0.5) * 5,
         vy: (Math.random() - 0.5) * 5,
-        size: 20,
+        size: 20 * obstacleScale,
         type: 'glitch',
         color: '#fff',
         rotation: 0
@@ -539,22 +555,22 @@ export default function App() {
     
     let type: Projectile['type'] = 'arrow';
     let color = '#f59e0b';
-    let size = 8;
+    let size = 8 * obstacleScale;
     let homingLife = 0;
 
     if (rand > 0.8) {
       type = 'plasma';
       color = '#a855f7';
-      size = 12;
+      size = 12 * obstacleScale;
       homingLife = 180;
     } else if (rand > 0.6) {
       type = 'shuriken';
       color = '#94a3b8';
-      size = 10;
+      size = 10 * obstacleScale;
     } else if (rand > 0.35) {
       type = 'rocket';
       color = '#ef4444';
-      size = 15;
+      size = 15 * obstacleScale;
     }
     
     projectiles.current.push({
@@ -757,7 +773,7 @@ export default function App() {
       targetPos.current.x = playerPos.current.x;
       targetPos.current.y = playerPos.current.y;
     } else if (useJoystickRef.current && (joystickVectorRef.current.x !== 0 || joystickVectorRef.current.y !== 0)) {
-      const speed = KEYBOARD_SPEED * 0.3; // Slightly slower as requested
+      const speed = KEYBOARD_SPEED * 0.4; // Reduced speed as requested
       playerPos.current.x = Math.max(0, Math.min(width, playerPos.current.x + joystickVectorRef.current.x * speed));
       playerPos.current.y = Math.max(0, Math.min(height, playerPos.current.y + joystickVectorRef.current.y * speed));
       targetPos.current.x = playerPos.current.x;
@@ -890,7 +906,7 @@ export default function App() {
       c.pulse += 0.1;
       
       const dist = Math.hypot(c.x - playerPos.current.x, c.y - playerPos.current.y);
-      if (dist < PLAYER_RADIUS + c.size / 2) {
+      if (dist < (PLAYER_RADIUS + c.size / 2) * 1.2) { // Slightly larger pickup radius for coins
         if (c.type === 'coin') {
           bonusScoreRef.current += 200;
           setBonusScore(bonusScoreRef.current);
@@ -1010,7 +1026,7 @@ export default function App() {
       p.y += p.vy;
 
       const dist = Math.hypot(p.x - playerPos.current.x, p.y - playerPos.current.y);
-      if (dist < PLAYER_RADIUS + p.size / 2) {
+      if (dist < (PLAYER_RADIUS + p.size / 2) * 0.85) { // Collision Padding for better feel
         if (shieldCount.current > 0) {
           shieldCount.current--;
           let blastColor = '#fff';
@@ -1961,6 +1977,7 @@ export default function App() {
                           onClick={() => setUseJoystick(true)}
                           className={`p-5 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 relative overflow-hidden ${useJoystick ? 'border-indigo-500 bg-indigo-500/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}
                          >
+                           <div className="absolute top-0 left-0 bg-indigo-500 text-[8px] px-2 py-0.5 font-bold uppercase tracking-widest text-white rounded-br-lg">추천</div>
                            <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${useJoystick ? 'bg-indigo-500' : 'bg-transparent'}`} />
                            <Zap className="w-8 h-8 text-indigo-400" />
                            <div className="text-center">
